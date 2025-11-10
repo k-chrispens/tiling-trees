@@ -50,7 +50,7 @@
             width: 100%;
             height: calc(100vh - 80px);
             position: relative;
-            overflow: hidden;
+            overflow: auto;
         }
 
         .tree-wrapper {
@@ -106,8 +106,8 @@
 
         .children-container {
             display: flex;
-            gap: 100px;
-            margin-top: 100px;
+            gap: 150px;
+            margin-top: 120px;
             position: relative;
             justify-content: center;
         }
@@ -311,8 +311,8 @@
             generateSVG(rootNode) {
                 const nodeHeight = 50;
                 const nodeWidth = 300;
-                const horizontalSpacing = 100;
-                const verticalSpacing = 120;
+                const horizontalSpacing = 150;
+                const verticalSpacing = 140;
 
                 // Calculate layout positions
                 const layout = this.calculateLayout(rootNode, 0, 0, nodeWidth, horizontalSpacing, verticalSpacing);
@@ -606,25 +606,40 @@
                 // Get all node inputs
                 const inputs = content.querySelectorAll('.node-input');
 
+                // Helper function to get absolute position within content
+                const getPosition = (element) => {
+                    let x = 0;
+                    let y = 0;
+                    let current = element;
+
+                    while (current && current !== content) {
+                        x += current.offsetLeft || 0;
+                        y += current.offsetTop || 0;
+                        current = current.offsetParent;
+                    }
+
+                    return { x, y };
+                };
+
                 // Calculate SVG bounds
                 let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
                 inputs.forEach(input => {
-                    const rect = input.getBoundingClientRect();
-                    const contentRect = content.getBoundingClientRect();
-                    const x = rect.left - contentRect.left;
-                    const y = rect.top - contentRect.top;
-
-                    minX = Math.min(minX, x);
-                    maxX = Math.max(maxX, x + input.offsetWidth);
-                    minY = Math.min(minY, y);
-                    maxY = Math.max(maxY, y + input.offsetHeight);
+                    const pos = getPosition(input);
+                    minX = Math.min(minX, pos.x);
+                    maxX = Math.max(maxX, pos.x + input.offsetWidth);
+                    minY = Math.min(minY, pos.y);
+                    maxY = Math.max(maxY, pos.y + input.offsetHeight);
                 });
 
                 // Set SVG size with padding
                 const padding = 200;
-                svg.setAttribute('width', (maxX - minX + padding * 2) || 10000);
-                svg.setAttribute('height', (maxY - minY + padding * 2) || 10000);
+                const width = (maxX - minX + padding * 2) || 10000;
+                const height = (maxY - minY + padding * 2) || 10000;
+
+                svg.setAttribute('width', width);
+                svg.setAttribute('height', height);
+                svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
                 svg.style.position = 'absolute';
                 svg.style.left = (minX - padding) + 'px';
                 svg.style.top = (minY - padding) + 'px';
@@ -637,17 +652,16 @@
                     const node = this.findNode(this.root, parseInt(nodeId));
 
                     if (node && node.children && node.children.length > 0) {
-                        const parentRect = input.getBoundingClientRect();
-                        const contentRect = content.getBoundingClientRect();
-                        const parentX = (parentRect.left - contentRect.left) + input.offsetWidth / 2 + offsetX;
-                        const parentY = (parentRect.top - contentRect.top) + input.offsetHeight + offsetY;
+                        const parentPos = getPosition(input);
+                        const parentX = parentPos.x + input.offsetWidth / 2 + offsetX;
+                        const parentY = parentPos.y + input.offsetHeight + offsetY;
 
                         node.children.forEach((child, index) => {
                             const childInput = content.querySelector(`input[data-node-id="${child.id}"]`);
                             if (childInput) {
-                                const childRect = childInput.getBoundingClientRect();
-                                const childX = (childRect.left - contentRect.left) + childInput.offsetWidth / 2 + offsetX;
-                                const childY = (childRect.top - contentRect.top) + offsetY;
+                                const childPos = getPosition(childInput);
+                                const childX = childPos.x + childInput.offsetWidth / 2 + offsetX;
+                                const childY = childPos.y + offsetY;
 
                                 // Create line element
                                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
