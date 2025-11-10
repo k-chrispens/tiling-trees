@@ -78,7 +78,8 @@
 
         .node-input {
             position: absolute;
-            width: 300px;
+            min-width: 150px;
+            max-width: 600px;
             padding: 10px 14px;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -153,6 +154,24 @@
                 return node.text.trim().length > 0;
             }
 
+            measureTextWidth(text, placeholder) {
+                // Create temporary canvas to measure text
+                if (!this.textMeasureCanvas) {
+                    this.textMeasureCanvas = document.createElement('canvas');
+                    this.textMeasureContext = this.textMeasureCanvas.getContext('2d');
+                    this.textMeasureContext.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif';
+                }
+
+                const displayText = text || placeholder || '';
+                const textWidth = this.textMeasureContext.measureText(displayText).width;
+
+                // Add padding (10px on each side) + border (1px each side) + some extra space
+                const totalWidth = textWidth + 20 + 2 + 40; // 40px extra for comfort
+
+                // Clamp between min and max
+                return Math.max(150, Math.min(600, totalWidth));
+            }
+
             onNodeInput(nodeId, text) {
                 const node = this.findNode(this.root, nodeId);
                 if (!node) {
@@ -204,19 +223,28 @@
                     this.focusState = { nodeId, cursorPos };
                 }
 
+                // Calculate widths for all nodes
+                const calculateNodeWidths = (node) => {
+                    const width = this.measureTextWidth(node.text, node.placeholder);
+                    node._width = width;
+                    if (node.children) {
+                        node.children.forEach(child => calculateNodeWidths(child));
+                    }
+                };
+                calculateNodeWidths(this.root);
+
                 // Use calculateLayout to position all nodes
-                const nodeWidth = 300;
                 const nodeHeight = 50;
-                const hSpacing = 60;  // Reduced from 150
+                const hSpacing = 60;
                 const vSpacing = 100;
 
-                const layout = this.calculateLayout(this.root, 0, 0, nodeWidth, hSpacing, vSpacing);
+                const layout = this.calculateLayout(this.root, 0, 0, hSpacing, vSpacing);
 
                 // Find bounds
                 let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
                 layout.forEach(item => {
                     minX = Math.min(minX, item.x);
-                    maxX = Math.max(maxX, item.x + nodeWidth);
+                    maxX = Math.max(maxX, item.x + item.width);
                     minY = Math.min(minY, item.y);
                     maxY = Math.max(maxY, item.y + nodeHeight);
                 });
@@ -240,6 +268,7 @@
                     input.dataset.nodeId = item.node.id;
                     input.style.left = (item.x - minX + padding) + 'px';
                     input.style.top = (item.y - minY + padding) + 'px';
+                    input.style.width = item.width + 'px';
 
                     input.addEventListener('input', (e) => {
                         this.onNodeInput(item.node.id, e.target.value);
@@ -304,18 +333,27 @@
 
             generateSVG(rootNode) {
                 const nodeHeight = 50;
-                const nodeWidth = 300;
                 const horizontalSpacing = 60;
                 const verticalSpacing = 100;
 
+                // Calculate widths for export nodes
+                const calculateNodeWidths = (node) => {
+                    const width = this.measureTextWidth(node.text, '');
+                    node._width = width;
+                    if (node.children) {
+                        node.children.forEach(child => calculateNodeWidths(child));
+                    }
+                };
+                calculateNodeWidths(rootNode);
+
                 // Calculate layout positions
-                const layout = this.calculateLayout(rootNode, 0, 0, nodeWidth, horizontalSpacing, verticalSpacing);
+                const layout = this.calculateLayout(rootNode, 0, 0, horizontalSpacing, verticalSpacing);
 
                 // Find bounds
                 let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
                 layout.forEach(item => {
                     minX = Math.min(minX, item.x);
-                    maxX = Math.max(maxX, item.x + nodeWidth);
+                    maxX = Math.max(maxX, item.x + item.width);
                     minY = Math.min(minY, item.y);
                     maxY = Math.max(maxY, item.y + nodeHeight);
                 });
@@ -341,9 +379,9 @@
                 // Draw connections first (so they're behind nodes) - diagonal lines
                 layout.forEach(item => {
                     if (item.parentItem) {
-                        const x1 = item.parentItem.x + nodeWidth / 2 + offsetX;
+                        const x1 = item.parentItem.centerX + offsetX;
                         const y1 = item.parentItem.y + nodeHeight + offsetY;
-                        const x2 = item.x + nodeWidth / 2 + offsetX;
+                        const x2 = item.centerX + offsetX;
                         const y2 = item.y + offsetY;
 
                         // Draw direct diagonal line from parent to child
@@ -356,38 +394,33 @@
                     const x = item.x + offsetX;
                     const y = item.y + offsetY;
 
-                    svg += `    <rect class="node-rect" x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="4" />\n`;
+                    svg += `    <rect class="node-rect" x="${x}" y="${y}" width="${item.width}" height="${nodeHeight}" rx="4" />\n`;
 
-                    // Wrap text if too long
+                    // Text positioning - center of the box
                     const text = item.node.text;
-                    const maxChars = 40;
-                    if (text.length > maxChars) {
-                        const line1 = text.substring(0, maxChars);
-                        const line2 = text.substring(maxChars, maxChars * 2);
-                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 - 5}" text-anchor="middle">${this.escapeXml(line1)}</text>\n`;
-                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 15}" text-anchor="middle">${this.escapeXml(line2)}</text>\n`;
-                    } else {
-                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 6}" text-anchor="middle">${this.escapeXml(text)}</text>\n`;
-                    }
+                    svg += `    <text class="node-text" x="${x + item.width / 2}" y="${y + nodeHeight / 2 + 6}" text-anchor="middle">${this.escapeXml(text)}</text>\n`;
                 });
 
                 svg += '</svg>';
                 return svg;
             }
 
-            calculateLayout(node, depth, position, nodeWidth, hSpacing, vSpacing) {
+            calculateLayout(node, depth, position, hSpacing, vSpacing) {
                 // Use a modified Reingold-Tilford algorithm for proper tree layout
                 const nodeHeight = 50;
 
                 // First pass: Calculate relative positions and subtree extents
                 const firstPass = (n, d) => {
+                    const nodeWidth = n._width || 150;
+
                     const info = {
                         node: n,
                         depth: d,
-                        x: 0, // Relative position within subtree
+                        width: nodeWidth,
+                        x: 0, // Relative position within subtree (center of node)
                         children: [],
-                        leftExtent: 0,
-                        rightExtent: 0
+                        leftExtent: -nodeWidth / 2,
+                        rightExtent: nodeWidth / 2
                     };
 
                     if (n.children && n.children.length > 0) {
@@ -400,11 +433,10 @@
                         const numChildren = info.children.length;
 
                         if (numChildren === 1) {
-                            // Single child: place directly below
+                            // Single child: place directly below (centered)
                             info.children[0].x = 0;
                         } else {
                             // Multiple children: distribute them
-                            // Start by placing them with minimum spacing
                             let positions = [];
 
                             if (numChildren % 2 === 1) {
@@ -419,7 +451,7 @@
 
                                     // Calculate minimum separation
                                     const minSeparation = this.getMinSeparation(
-                                        currentChild, rightSibling, nodeWidth, hSpacing
+                                        currentChild, rightSibling, hSpacing
                                     );
 
                                     positions[i] = positions[i + 1] - minSeparation;
@@ -432,14 +464,13 @@
 
                                     // Calculate minimum separation
                                     const minSeparation = this.getMinSeparation(
-                                        leftSibling, currentChild, nodeWidth, hSpacing
+                                        leftSibling, currentChild, hSpacing
                                     );
 
                                     positions[i] = positions[i - 1] + minSeparation;
                                 }
                             } else {
                                 // Even number: center the group
-                                // Place first child
                                 positions[0] = 0;
 
                                 // Place remaining children
@@ -448,7 +479,7 @@
                                     const currentChild = info.children[i];
 
                                     const minSeparation = this.getMinSeparation(
-                                        leftSibling, currentChild, nodeWidth, hSpacing
+                                        leftSibling, currentChild, hSpacing
                                     );
 
                                     positions[i] = positions[i - 1] + minSeparation;
@@ -466,25 +497,23 @@
                         }
 
                         // Calculate this node's extents based on children
+                        const childExtents = info.children.map(c => ({
+                            left: c.x + c.leftExtent,
+                            right: c.x + c.rightExtent
+                        }));
+
                         info.leftExtent = Math.min(
-                            0,
-                            ...info.children.map(c => c.x + c.leftExtent)
+                            -nodeWidth / 2,
+                            ...childExtents.map(e => e.left)
                         );
                         info.rightExtent = Math.max(
-                            0,
-                            ...info.children.map(c => c.x + c.rightExtent)
+                            nodeWidth / 2,
+                            ...childExtents.map(e => e.right)
                         );
-                    } else {
-                        // Leaf node
-                        info.leftExtent = 0;
-                        info.rightExtent = 0;
                     }
 
                     return info;
                 };
-
-                // Helper to get minimum separation between two subtrees
-                const minSeparation = this.getMinSeparation;
 
                 // Perform first pass
                 const treeInfo = firstPass(node, depth);
@@ -495,8 +524,10 @@
                 const secondPass = (info, absoluteX, absoluteY, parent) => {
                     const item = {
                         node: info.node,
-                        x: absoluteX,
+                        width: info.width,
+                        x: absoluteX - info.width / 2, // x is left edge for rendering
                         y: absoluteY,
+                        centerX: absoluteX, // Store center for line drawing
                         parentItem: parent,
                         siblings: null
                     };
@@ -508,7 +539,7 @@
                         const childItems = [];
 
                         info.children.forEach(childInfo => {
-                            const childAbsoluteX = absoluteX + childInfo.x;
+                            const childAbsoluteX = absoluteX + childInfo.x; // Child x is relative to parent center
                             childItems.push(secondPass(childInfo, childAbsoluteX, childY, item));
                         });
 
@@ -529,25 +560,34 @@
                 return result;
             }
 
-            getMinSeparation(leftTree, rightTree, nodeWidth, hSpacing) {
+            getMinSeparation(leftTree, rightTree, hSpacing) {
                 // Calculate minimum horizontal separation between two subtrees
                 // by checking their contours at each level
 
-                const minGap = hSpacing + nodeWidth;
-
-                // Get right contour of left tree and left contour of right tree
+                // Get contours with actual node widths
                 const getContour = (tree, side) => {
-                    const contour = [];
+                    const contour = []; // Array of {pos, width} objects
 
                     const traverse = (info, relX, depth) => {
                         if (!contour[depth]) {
-                            contour[depth] = side === 'right' ? -Infinity : Infinity;
+                            contour[depth] = {
+                                pos: side === 'right' ? -Infinity : Infinity,
+                                width: info.width
+                            };
                         }
 
                         if (side === 'right') {
-                            contour[depth] = Math.max(contour[depth], relX);
+                            // Right edge position
+                            const rightEdge = relX + info.width / 2;
+                            if (rightEdge > contour[depth].pos) {
+                                contour[depth] = { pos: rightEdge, width: info.width };
+                            }
                         } else {
-                            contour[depth] = Math.min(contour[depth], relX);
+                            // Left edge position
+                            const leftEdge = relX - info.width / 2;
+                            if (leftEdge < contour[depth].pos) {
+                                contour[depth] = { pos: leftEdge, width: info.width };
+                            }
                         }
 
                         if (info.children) {
@@ -564,15 +604,16 @@
                 const leftContour = getContour(leftTree, 'right');
                 const rightContour = getContour(rightTree, 'left');
 
-                // Find the maximum overlap
-                let maxSeparation = minGap;
+                // Find the maximum separation needed
+                let maxSeparation = hSpacing;
                 const maxDepth = Math.max(leftContour.length, rightContour.length);
 
                 for (let d = 0; d < maxDepth; d++) {
-                    const leftPos = leftContour[d] !== undefined ? leftContour[d] : leftContour[leftContour.length - 1] || 0;
-                    const rightPos = rightContour[d] !== undefined ? rightContour[d] : rightContour[rightContour.length - 1] || 0;
+                    const leftInfo = leftContour[d] || leftContour[leftContour.length - 1] || { pos: 0, width: 0 };
+                    const rightInfo = rightContour[d] || rightContour[rightContour.length - 1] || { pos: 0, width: 0 };
 
-                    const separation = leftPos - rightPos + minGap;
+                    // Separation needed: difference in edge positions + spacing
+                    const separation = leftInfo.pos - rightInfo.pos + hSpacing;
                     maxSeparation = Math.max(maxSeparation, separation);
                 }
 
