@@ -385,41 +385,12 @@
                 const result = [];
                 const y = depth * (50 + vSpacing);
 
-                // First, calculate layouts for all children
-                let childrenLayouts = [];
-                if (node.children && node.children.length > 0) {
-                    let childX = 0;
-                    node.children.forEach((child) => {
-                        const childLayout = this.calculateLayout(child, depth + 1, childX, nodeWidth, hSpacing, vSpacing);
-                        childrenLayouts.push(childLayout);
-
-                        // Calculate width of this subtree
-                        const childMaxX = Math.max(...childLayout.map(item => item.x));
-                        childX = childMaxX + nodeWidth + hSpacing;
-                    });
-                }
-
-                // Flatten all child layouts
-                const allChildItems = childrenLayouts.flat();
-
-                // Calculate parent position (centered over children, or at position if no children)
-                let x;
-                if (allChildItems.length > 0) {
-                    const firstChild = allChildItems.find(item => node.children.some(c => c.id === item.node.id));
-                    const lastChild = [...allChildItems].reverse().find(item => node.children.some(c => c.id === item.node.id));
-
-                    if (firstChild && lastChild) {
-                        x = (firstChild.x + lastChild.x + nodeWidth) / 2 - nodeWidth / 2;
-                    } else {
-                        x = position;
-                    }
-                } else {
-                    x = position;
-                }
+                // Calculate parent x position first (will be at position parameter)
+                const parentX = position;
 
                 const parentItem = {
                     node: node,
-                    x: x,
+                    x: parentX,
                     y: y,
                     parentItem: null,
                     siblings: null
@@ -427,13 +398,71 @@
 
                 result.push(parentItem);
 
-                // Add all children with reference to parent
-                if (allChildItems.length > 0) {
+                // Layout children
+                if (node.children && node.children.length > 0) {
+                    const numChildren = node.children.length;
+                    const childrenLayouts = [];
+
+                    // Calculate layouts for each child recursively
+                    node.children.forEach((child) => {
+                        // Temporary position, will adjust later
+                        const childLayout = this.calculateLayout(child, depth + 1, 0, nodeWidth, hSpacing, vSpacing);
+                        childrenLayouts.push(childLayout);
+                    });
+
+                    // Calculate total width needed for all children subtrees
+                    const subtreeWidths = childrenLayouts.map(layout => {
+                        const xs = layout.map(item => item.x);
+                        return Math.max(...xs) - Math.min(...xs) + nodeWidth;
+                    });
+
+                    const totalWidth = subtreeWidths.reduce((sum, w) => sum + w, 0) + (numChildren - 1) * hSpacing;
+
+                    // If odd number of children, center middle child under parent
+                    // Otherwise, center the group under parent
+                    let startX;
+                    if (numChildren % 2 === 1) {
+                        // Odd number: position middle child directly under parent
+                        const middleIndex = Math.floor(numChildren / 2);
+                        let middleChildX = parentX;
+
+                        // Calculate position for middle child to be centered
+                        // Work backwards to find startX
+                        let offsetToMiddle = 0;
+                        for (let i = 0; i < middleIndex; i++) {
+                            offsetToMiddle += subtreeWidths[i] + hSpacing;
+                        }
+                        startX = middleChildX - offsetToMiddle;
+                    } else {
+                        // Even number: center the group under parent
+                        startX = parentX - totalWidth / 2 + nodeWidth / 2;
+                    }
+
+                    // Position each child subtree
+                    let currentX = startX;
+                    const allChildItems = [];
+
+                    childrenLayouts.forEach((childLayout, index) => {
+                        const minChildX = Math.min(...childLayout.map(item => item.x));
+
+                        // Offset this entire subtree
+                        const offset = currentX - minChildX;
+
+                        childLayout.forEach(item => {
+                            item.x += offset;
+                        });
+
+                        allChildItems.push(...childLayout);
+                        currentX += subtreeWidths[index] + hSpacing;
+                    });
+
+                    // Update parent references
                     const directChildren = allChildItems.filter(item => node.children.some(c => c.id === item.node.id));
                     directChildren.forEach(child => {
                         child.parentItem = parentItem;
                         child.siblings = directChildren;
                     });
+
                     result.push(...allChildItems);
                 }
 
