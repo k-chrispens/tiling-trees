@@ -100,6 +100,34 @@
             font-style: italic;
         }
 
+        .delete-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #f56565;
+            color: white;
+            border: 2px solid white;
+            font-size: 12px;
+            line-height: 16px;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            font-weight: bold;
+        }
+
+        .node-wrapper {
+            position: absolute;
+        }
+
+        .node-wrapper:hover .delete-btn {
+            display: flex;
+        }
+
         #export-canvas {
             display: none;
         }
@@ -152,6 +180,32 @@
 
             isFilled(node) {
                 return node.text.trim().length > 0;
+            }
+
+            deleteNode(nodeId) {
+                // Don't allow deleting the root node
+                const node = this.findNode(this.root, nodeId);
+                if (!node || node === this.root) {
+                    return;
+                }
+
+                // Find parent and remove this node
+                const parent = node.parent;
+                if (parent) {
+                    const index = parent.children.indexOf(node);
+                    if (index > -1) {
+                        parent.children.splice(index, 1);
+                    }
+
+                    // If parent has no children left, add two empty placeholders
+                    if (parent.children.length === 0 && this.isFilled(parent)) {
+                        parent.children.push(this.createNode(parent));
+                        parent.children.push(this.createNode(parent));
+                    }
+                }
+
+                this.saveToStorage();
+                this.render();
             }
 
             measureTextWidth(text, placeholder) {
@@ -260,21 +314,45 @@
 
                 // Create absolutely positioned inputs for each node
                 layout.forEach(item => {
+                    // Create wrapper for input + delete button
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'node-wrapper';
+                    wrapper.style.left = (item.x - minX + padding) + 'px';
+                    wrapper.style.top = (item.y - minY + padding) + 'px';
+                    wrapper.style.width = item.width + 'px';
+                    wrapper.style.height = '50px';
+
                     const input = document.createElement('input');
                     input.type = 'text';
                     input.className = 'node-input';
                     input.value = item.node.text;
                     input.placeholder = item.node.placeholder;
                     input.dataset.nodeId = item.node.id;
-                    input.style.left = (item.x - minX + padding) + 'px';
-                    input.style.top = (item.y - minY + padding) + 'px';
+                    input.style.position = 'relative';
+                    input.style.left = '0';
+                    input.style.top = '0';
                     input.style.width = item.width + 'px';
 
                     input.addEventListener('input', (e) => {
                         this.onNodeInput(item.node.id, e.target.value);
                     });
 
-                    content.appendChild(input);
+                    wrapper.appendChild(input);
+
+                    // Add delete button (not for root node)
+                    if (item.node !== this.root) {
+                        const deleteBtn = document.createElement('div');
+                        deleteBtn.className = 'delete-btn';
+                        deleteBtn.innerHTML = '×';
+                        deleteBtn.title = 'Delete node';
+                        deleteBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.deleteNode(item.node.id);
+                        });
+                        wrapper.appendChild(deleteBtn);
+                    }
+
+                    content.appendChild(wrapper);
                 });
 
                 // Restore focus state after re-rendering
@@ -814,8 +892,8 @@
                 // Clear existing lines
                 svg.innerHTML = '';
 
-                // Get all node inputs
-                const inputs = content.querySelectorAll('.node-input');
+                // Get all node wrappers (which contain inputs)
+                const wrappers = content.querySelectorAll('.node-wrapper');
 
                 // Helper function to get absolute position within content
                 const getPosition = (element) => {
@@ -835,12 +913,12 @@
                 // Calculate SVG bounds
                 let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
-                inputs.forEach(input => {
-                    const pos = getPosition(input);
+                wrappers.forEach(wrapper => {
+                    const pos = getPosition(wrapper);
                     minX = Math.min(minX, pos.x);
-                    maxX = Math.max(maxX, pos.x + input.offsetWidth);
+                    maxX = Math.max(maxX, pos.x + wrapper.offsetWidth);
                     minY = Math.min(minY, pos.y);
-                    maxY = Math.max(maxY, pos.y + input.offsetHeight);
+                    maxY = Math.max(maxY, pos.y + wrapper.offsetHeight);
                 });
 
                 // Set SVG size with padding
@@ -858,20 +936,23 @@
                 const offsetX = -minX + padding;
                 const offsetY = -minY + padding;
 
-                inputs.forEach(input => {
+                wrappers.forEach(wrapper => {
+                    const input = wrapper.querySelector('.node-input');
+                    if (!input) return;
+
                     const nodeId = input.dataset.nodeId;
                     const node = this.findNode(this.root, parseInt(nodeId));
 
                     if (node && node.children && node.children.length > 0) {
-                        const parentPos = getPosition(input);
-                        const parentX = parentPos.x + input.offsetWidth / 2 + offsetX;
-                        const parentY = parentPos.y + input.offsetHeight + offsetY;
+                        const parentPos = getPosition(wrapper);
+                        const parentX = parentPos.x + wrapper.offsetWidth / 2 + offsetX;
+                        const parentY = parentPos.y + wrapper.offsetHeight + offsetY;
 
                         node.children.forEach((child, index) => {
-                            const childInput = content.querySelector(`input[data-node-id="${child.id}"]`);
-                            if (childInput) {
-                                const childPos = getPosition(childInput);
-                                const childX = childPos.x + childInput.offsetWidth / 2 + offsetX;
+                            const childWrapper = content.querySelector(`.node-wrapper:has(input[data-node-id="${child.id}"])`);
+                            if (childWrapper) {
+                                const childPos = getPosition(childWrapper);
+                                const childX = childPos.x + childWrapper.offsetWidth / 2 + offsetX;
                                 const childY = childPos.y + offsetY;
 
                                 // Create line element
