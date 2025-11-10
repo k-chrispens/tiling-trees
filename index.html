@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tiling Tree Builder</title>
+    <title>Tiling Tree</title>
     <style>
         * {
             margin: 0;
@@ -13,208 +13,143 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .controls {
             background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+            min-height: 100vh;
+            padding: 40px 20px;
             display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+            flex-direction: column;
             align-items: center;
         }
 
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
         .btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 600;
+            transition: all 0.2s ease;
         }
 
         .btn:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        .btn-secondary {
-            background: #48bb78;
-        }
-
-        .btn-secondary:hover {
-            background: #38a169;
-        }
-
-        .btn-danger {
-            background: #f56565;
-        }
-
-        .btn-danger:hover {
-            background: #e53e3e;
+            background: #f5f5f5;
+            border-color: #999;
         }
 
         .tree-container {
-            background: white;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            min-height: 500px;
-            overflow: auto;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding-top: 60px;
         }
 
         .node {
             position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         .node-input {
             width: 300px;
-            padding: 12px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 15px;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
             font-family: inherit;
-            transition: all 0.3s ease;
+            transition: border-color 0.2s ease;
             background: white;
+            text-align: center;
         }
 
         .node-input:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: #333;
         }
 
-        .node-input.placeholder {
-            color: #a0aec0;
+        .node-input::placeholder {
+            color: #ccc;
             font-style: italic;
         }
 
-        .node-input.filled {
-            background: #f7fafc;
-            border-color: #667eea;
-        }
-
         .children-container {
-            margin-left: 60px;
-            margin-top: 20px;
+            display: flex;
+            gap: 40px;
+            margin-top: 60px;
             position: relative;
+            justify-content: center;
         }
 
         .child-node {
-            margin-bottom: 20px;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
-        .child-node::before {
-            content: '';
-            position: absolute;
-            left: -40px;
-            top: 20px;
-            width: 30px;
-            height: 2px;
-            background: #cbd5e0;
-        }
-
+        /* Vertical line from parent to children level */
         .children-container::before {
             content: '';
             position: absolute;
-            left: -40px;
-            top: 0;
-            bottom: 20px;
+            top: -60px;
+            left: 50%;
             width: 2px;
-            background: #cbd5e0;
+            height: 30px;
+            background: #000;
+            transform: translateX(-1px);
         }
 
-        .instructions {
-            background: #edf2f7;
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-left: 10px;
-            flex: 1;
-            min-width: 300px;
+        /* Horizontal line connecting all children */
+        .children-container::after {
+            content: '';
+            position: absolute;
+            top: -30px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #000;
         }
 
-        .instructions h3 {
-            font-size: 14px;
-            color: #2d3748;
-            margin-bottom: 5px;
+        /* Vertical line from horizontal connector to each child */
+        .child-node::before {
+            content: '';
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            width: 2px;
+            height: 30px;
+            background: #000;
+            transform: translateX(-1px);
         }
 
-        .instructions p {
-            font-size: 13px;
-            color: #4a5568;
-            line-height: 1.5;
+        /* Hide connector lines when there's only one child */
+        .children-container[data-children="1"]::after {
+            display: none;
         }
 
         #export-canvas {
             display: none;
         }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #718096;
-            font-style: italic;
-        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🌳 Tiling Tree Builder</h1>
-            <p>Break down complex problems into manageable pieces</p>
-        </div>
+    <div class="controls">
+        <button class="btn" onclick="app.exportSVG()">Export SVG</button>
+        <button class="btn" onclick="app.exportPNG()">Export PNG</button>
+        <button class="btn" onclick="app.reset()">Reset</button>
+    </div>
 
-        <div class="controls">
-            <button class="btn" onclick="app.exportSVG()">Export SVG</button>
-            <button class="btn btn-secondary" onclick="app.exportPNG()">Export PNG</button>
-            <button class="btn btn-danger" onclick="app.reset()">Reset Tree</button>
-
-            <div class="instructions">
-                <h3>How to use:</h3>
-                <p>Start typing in the root node. Two branches will automatically appear. As you fill branches, new ones sprout. The tree grows as you explore your problem space.</p>
-            </div>
-        </div>
-
-        <div class="tree-container" id="tree-container">
-            <!-- Tree will be rendered here -->
-        </div>
+    <div class="tree-container" id="tree-container">
+        <!-- Tree will be rendered here -->
     </div>
 
     <canvas id="export-canvas"></canvas>
@@ -222,8 +157,8 @@
     <script>
         class TilingTree {
             constructor() {
-                this.root = this.createNode(null, 'Start typing your problem here...');
                 this.nodeCounter = 0;
+                this.root = this.createNode(null, 'Start typing here...');
                 this.render();
             }
 
@@ -243,14 +178,17 @@
 
             onNodeInput(nodeId, text) {
                 const node = this.findNode(this.root, nodeId);
-                if (!node) return;
+                if (!node) {
+                    console.error('Node not found:', nodeId);
+                    return;
+                }
 
                 const wasFilled = this.isFilled(node);
                 node.text = text;
-                const isFilled = this.isFilled(node);
+                const isNowFilled = this.isFilled(node);
 
                 // If node just became filled and has no children, create initial 2 branches
-                if (!wasFilled && isFilled && node.children.length === 0) {
+                if (!wasFilled && isNowFilled && node.children.length === 0) {
                     node.children.push(this.createNode(node));
                     node.children.push(this.createNode(node));
                 }
@@ -290,12 +228,6 @@
                 input.value = node.text;
                 input.placeholder = node.placeholder;
 
-                if (this.isFilled(node)) {
-                    input.classList.add('filled');
-                } else {
-                    input.classList.add('placeholder');
-                }
-
                 input.addEventListener('input', (e) => {
                     this.onNodeInput(node.id, e.target.value);
                 });
@@ -305,6 +237,7 @@
                 if (node.children.length > 0) {
                     const childrenContainer = document.createElement('div');
                     childrenContainer.className = 'children-container';
+                    childrenContainer.setAttribute('data-children', node.children.length);
 
                     node.children.forEach(child => {
                         childrenContainer.appendChild(this.renderNode(child, false));
@@ -323,33 +256,35 @@
             }
 
             getFilledNodes(node) {
-                const result = [];
-
-                if (this.isFilled(node)) {
-                    result.push({
-                        ...node,
-                        children: []
-                    });
-
-                    const filledChildren = node.children
-                        .map(child => this.getFilledNodes(child))
-                        .flat();
-
-                    result[0].children = filledChildren;
+                if (!this.isFilled(node)) {
+                    return null;
                 }
+
+                const result = {
+                    id: node.id,
+                    text: node.text,
+                    children: []
+                };
+
+                node.children.forEach(child => {
+                    const filledChild = this.getFilledNodes(child);
+                    if (filledChild) {
+                        result.children.push(filledChild);
+                    }
+                });
 
                 return result;
             }
 
             exportSVG() {
-                const filledNodes = this.getFilledNodes(this.root);
+                const filledRoot = this.getFilledNodes(this.root);
 
-                if (filledNodes.length === 0) {
+                if (!filledRoot) {
                     alert('Please add some content to your tree before exporting.');
                     return;
                 }
 
-                const svg = this.generateSVG(filledNodes[0]);
+                const svg = this.generateSVG(filledRoot);
                 const blob = new Blob([svg], { type: 'image/svg+xml' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -360,16 +295,16 @@
             }
 
             generateSVG(rootNode) {
-                const nodeHeight = 40;
+                const nodeHeight = 50;
                 const nodeWidth = 300;
-                const horizontalSpacing = 80;
-                const verticalSpacing = 60;
+                const horizontalSpacing = 60;
+                const verticalSpacing = 100;
 
                 // Calculate layout positions
                 const layout = this.calculateLayout(rootNode, 0, 0, nodeWidth, horizontalSpacing, verticalSpacing);
 
                 // Find bounds
-                let minX = 0, maxX = 0, minY = 0, maxY = 0;
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
                 layout.forEach(item => {
                     minX = Math.min(minX, item.x);
                     maxX = Math.max(maxX, item.x + nodeWidth);
@@ -385,24 +320,42 @@
 
                 let svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-    <style>
-        .node-rect { fill: #f7fafc; stroke: #667eea; stroke-width: 2; rx: 8; }
-        .node-text { fill: #2d3748; font-family: Arial, sans-serif; font-size: 14px; }
-        .branch-line { stroke: #cbd5e0; stroke-width: 2; fill: none; }
-    </style>
+    <defs>
+        <style>
+            .node-rect { fill: white; stroke: #000; stroke-width: 1; }
+            .node-text { fill: #000; font-family: Arial, sans-serif; font-size: 16px; }
+            .branch-line { stroke: #000; stroke-width: 2; fill: none; }
+        </style>
+    </defs>
+    <rect width="${width}" height="${height}" fill="white"/>
 `;
 
                 // Draw connections first (so they're behind nodes)
                 layout.forEach(item => {
-                    if (item.parent) {
-                        const parentItem = layout.find(l => l.node.id === item.parent.id);
-                        if (parentItem) {
-                            const x1 = parentItem.x + nodeWidth / 2 + offsetX;
-                            const y1 = parentItem.y + nodeHeight + offsetY;
-                            const x2 = item.x + nodeWidth / 2 + offsetX;
-                            const y2 = item.y + offsetY;
+                    if (item.parentItem) {
+                        const x1 = item.parentItem.x + nodeWidth / 2 + offsetX;
+                        const y1 = item.parentItem.y + nodeHeight + offsetY;
+                        const x2 = item.x + nodeWidth / 2 + offsetX;
+                        const y2 = item.y + offsetY;
 
-                            svg += `    <path class="branch-line" d="M ${x1} ${y1} L ${x1} ${(y1 + y2) / 2} L ${x2} ${(y1 + y2) / 2} L ${x2} ${y2}" />\n`;
+                        // Draw vertical line from parent
+                        const midY = y1 + (y2 - y1) / 2;
+
+                        // If there are siblings, draw the connector pattern
+                        if (item.siblings && item.siblings.length > 1) {
+                            // Vertical line down from parent
+                            svg += `    <line class="branch-line" x1="${x1}" y1="${y1}" x2="${x1}" y2="${midY}" />\n`;
+
+                            // Horizontal line across siblings
+                            const leftmost = Math.min(...item.siblings.map(s => s.x + nodeWidth / 2 + offsetX));
+                            const rightmost = Math.max(...item.siblings.map(s => s.x + nodeWidth / 2 + offsetX));
+                            svg += `    <line class="branch-line" x1="${leftmost}" y1="${midY}" x2="${rightmost}" y2="${midY}" />\n`;
+
+                            // Vertical line down to this child
+                            svg += `    <line class="branch-line" x1="${x2}" y1="${midY}" x2="${x2}" y2="${y2}" />\n`;
+                        } else {
+                            // Single child - just draw straight line
+                            svg += `    <line class="branch-line" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />\n`;
                         }
                     }
                 });
@@ -412,18 +365,18 @@
                     const x = item.x + offsetX;
                     const y = item.y + offsetY;
 
-                    svg += `    <rect class="node-rect" x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" />\n`;
+                    svg += `    <rect class="node-rect" x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="4" />\n`;
 
                     // Wrap text if too long
                     const text = item.node.text;
-                    const maxChars = 35;
+                    const maxChars = 40;
                     if (text.length > maxChars) {
                         const line1 = text.substring(0, maxChars);
                         const line2 = text.substring(maxChars, maxChars * 2);
                         svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 - 5}" text-anchor="middle">${this.escapeXml(line1)}</text>\n`;
-                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 12}" text-anchor="middle">${this.escapeXml(line2)}</text>\n`;
+                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 15}" text-anchor="middle">${this.escapeXml(line2)}</text>\n`;
                     } else {
-                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 5}" text-anchor="middle">${this.escapeXml(text)}</text>\n`;
+                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 6}" text-anchor="middle">${this.escapeXml(text)}</text>\n`;
                     }
                 });
 
@@ -433,37 +386,58 @@
 
             calculateLayout(node, depth, position, nodeWidth, hSpacing, vSpacing) {
                 const result = [];
-                const x = position;
-                const y = depth * (40 + vSpacing);
+                const y = depth * (50 + vSpacing);
 
-                result.push({
-                    node: node,
-                    x: x,
-                    y: y,
-                    parent: node.parent
-                });
-
+                // First, calculate layouts for all children
+                let childrenLayouts = [];
                 if (node.children && node.children.length > 0) {
-                    let childX = x;
-                    node.children.forEach((child, index) => {
+                    let childX = 0;
+                    node.children.forEach((child) => {
                         const childLayout = this.calculateLayout(child, depth + 1, childX, nodeWidth, hSpacing, vSpacing);
-                        result.push(...childLayout);
+                        childrenLayouts.push(childLayout);
 
                         // Calculate width of this subtree
                         const childMaxX = Math.max(...childLayout.map(item => item.x));
                         childX = childMaxX + nodeWidth + hSpacing;
                     });
+                }
 
-                    // Center parent over children
-                    const firstChild = result.find(item => node.children.includes(item.node));
-                    const lastChildLayout = result.filter(item => item.node === node.children[node.children.length - 1]);
-                    const lastChild = lastChildLayout[0];
+                // Flatten all child layouts
+                const allChildItems = childrenLayouts.flat();
+
+                // Calculate parent position (centered over children, or at position if no children)
+                let x;
+                if (allChildItems.length > 0) {
+                    const firstChild = allChildItems.find(item => node.children.some(c => c.id === item.node.id));
+                    const lastChild = [...allChildItems].reverse().find(item => node.children.some(c => c.id === item.node.id));
 
                     if (firstChild && lastChild) {
-                        const childrenCenter = (firstChild.x + lastChild.x + nodeWidth) / 2;
-                        const parentItem = result.find(item => item.node === node);
-                        parentItem.x = childrenCenter - nodeWidth / 2;
+                        x = (firstChild.x + lastChild.x + nodeWidth) / 2 - nodeWidth / 2;
+                    } else {
+                        x = position;
                     }
+                } else {
+                    x = position;
+                }
+
+                const parentItem = {
+                    node: node,
+                    x: x,
+                    y: y,
+                    parentItem: null,
+                    siblings: null
+                };
+
+                result.push(parentItem);
+
+                // Add all children with reference to parent
+                if (allChildItems.length > 0) {
+                    const directChildren = allChildItems.filter(item => node.children.some(c => c.id === item.node.id));
+                    directChildren.forEach(child => {
+                        child.parentItem = parentItem;
+                        child.siblings = directChildren;
+                    });
+                    result.push(...allChildItems);
                 }
 
                 return result;
@@ -479,14 +453,14 @@
             }
 
             exportPNG() {
-                const filledNodes = this.getFilledNodes(this.root);
+                const filledRoot = this.getFilledNodes(this.root);
 
-                if (filledNodes.length === 0) {
+                if (!filledRoot) {
                     alert('Please add some content to your tree before exporting.');
                     return;
                 }
 
-                const svg = this.generateSVG(filledNodes[0]);
+                const svg = this.generateSVG(filledRoot);
 
                 // Create an image from SVG
                 const img = new Image();
@@ -495,23 +469,29 @@
 
                 img.onload = () => {
                     const canvas = document.getElementById('export-canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
+                    canvas.width = img.width * 2; // 2x for better quality
+                    canvas.height = img.height * 2;
                     const ctx = canvas.getContext('2d');
+                    ctx.scale(2, 2);
                     ctx.fillStyle = 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillRect(0, 0, img.width, img.height);
                     ctx.drawImage(img, 0, 0);
 
                     canvas.toBlob((blob) => {
-                        const url = URL.createObjectURL(blob);
+                        const downloadUrl = URL.createObjectURL(blob);
                         const a = document.createElement('a');
-                        a.href = url;
+                        a.href = downloadUrl;
                         a.download = 'tiling-tree.png';
                         a.click();
-                        URL.revokeObjectURL(url);
+                        URL.revokeObjectURL(downloadUrl);
                     });
 
                     URL.revokeObjectURL(url);
+                };
+
+                img.onerror = (e) => {
+                    console.error('Error loading image:', e);
+                    alert('Error generating PNG. Please try exporting as SVG instead.');
                 };
 
                 img.src = url;
@@ -519,16 +499,19 @@
 
             reset() {
                 if (confirm('Are you sure you want to reset the tree? This cannot be undone.')) {
-                    this.root = this.createNode(null, 'Start typing your problem here...');
+                    localStorage.removeItem('tilingTree');
                     this.nodeCounter = 0;
-                    this.saveToStorage();
+                    this.root = this.createNode(null, 'Start typing here...');
                     this.render();
                 }
             }
 
             saveToStorage() {
                 try {
-                    localStorage.setItem('tilingTree', JSON.stringify(this.root));
+                    localStorage.setItem('tilingTree', JSON.stringify({
+                        root: this.root,
+                        nodeCounter: this.nodeCounter
+                    }));
                 } catch (e) {
                     console.warn('Could not save to localStorage:', e);
                 }
@@ -538,8 +521,13 @@
                 try {
                     const saved = localStorage.getItem('tilingTree');
                     if (saved) {
-                        this.root = JSON.parse(saved);
-                        this.nodeCounter = this.findMaxId(this.root) + 1;
+                        const data = JSON.parse(saved);
+                        this.root = data.root;
+                        this.nodeCounter = data.nodeCounter || this.findMaxId(this.root) + 1;
+
+                        // Restore parent references (they don't serialize well)
+                        this.restoreParentRefs(this.root, null);
+
                         this.render();
                     }
                 } catch (e) {
@@ -547,11 +535,20 @@
                 }
             }
 
+            restoreParentRefs(node, parent) {
+                node.parent = parent;
+                if (node.children) {
+                    node.children.forEach(child => this.restoreParentRefs(child, node));
+                }
+            }
+
             findMaxId(node) {
                 let maxId = node.id;
-                node.children.forEach(child => {
-                    maxId = Math.max(maxId, this.findMaxId(child));
-                });
+                if (node.children) {
+                    node.children.forEach(child => {
+                        maxId = Math.max(maxId, this.findMaxId(child));
+                    });
+                }
                 return maxId;
             }
         }
