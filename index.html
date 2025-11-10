@@ -376,104 +376,207 @@
             }
 
             calculateLayout(node, depth, position, nodeWidth, hSpacing, vSpacing) {
-                const result = [];
-                const y = depth * (50 + vSpacing);
+                // Use a modified Reingold-Tilford algorithm for proper tree layout
+                const nodeHeight = 50;
 
-                // Calculate parent x position first (will be at position parameter)
-                const parentX = position;
+                // First pass: Calculate relative positions and subtree extents
+                const firstPass = (n, d) => {
+                    const info = {
+                        node: n,
+                        depth: d,
+                        x: 0, // Relative position within subtree
+                        children: [],
+                        leftExtent: 0,
+                        rightExtent: 0
+                    };
 
-                const parentItem = {
-                    node: node,
-                    x: parentX,
-                    y: y,
-                    parentItem: null,
-                    siblings: null
-                };
-
-                result.push(parentItem);
-
-                // Layout children
-                if (node.children && node.children.length > 0) {
-                    const numChildren = node.children.length;
-                    const childrenLayouts = [];
-
-                    // Calculate layouts for each child recursively
-                    node.children.forEach((child) => {
-                        // Temporary position, will adjust later
-                        const childLayout = this.calculateLayout(child, depth + 1, 0, nodeWidth, hSpacing, vSpacing);
-                        childrenLayouts.push(childLayout);
-                    });
-
-                    // Find the direct child node in each subtree layout
-                    const childNodes = childrenLayouts.map((layout, index) => {
-                        return layout.find(item => item.node.id === node.children[index].id);
-                    });
-
-                    // Calculate subtree widths
-                    const subtreeWidths = childrenLayouts.map(layout => {
-                        const xs = layout.map(item => item.x);
-                        return Math.max(...xs) - Math.min(...xs) + nodeWidth;
-                    });
-
-                    // Calculate where each CHILD NODE (not subtree) should be positioned
-                    const childTargetPositions = [];
-
-                    if (numChildren % 2 === 1) {
-                        // Odd number: position middle child directly under parent
-                        const middleIndex = Math.floor(numChildren / 2);
-
-                        // Middle child at parent position
-                        childTargetPositions[middleIndex] = parentX;
-
-                        // Position children to the left of middle
-                        let leftX = parentX;
-                        for (let i = middleIndex - 1; i >= 0; i--) {
-                            leftX -= (subtreeWidths[i] + hSpacing);
-                            childTargetPositions[i] = leftX;
-                        }
-
-                        // Position children to the right of middle
-                        let rightX = parentX;
-                        for (let i = middleIndex + 1; i < numChildren; i++) {
-                            rightX += (subtreeWidths[i - 1] + hSpacing);
-                            childTargetPositions[i] = rightX;
-                        }
-                    } else {
-                        // Even number: center the group under parent
-                        const totalWidth = subtreeWidths.reduce((sum, w) => sum + w, 0) + (numChildren - 1) * hSpacing;
-                        let currentX = parentX - totalWidth / 2 + nodeWidth / 2;
-
-                        for (let i = 0; i < numChildren; i++) {
-                            childTargetPositions[i] = currentX;
-                            currentX += subtreeWidths[i] + hSpacing;
-                        }
-                    }
-
-                    // Offset each subtree so its child node is at the target position
-                    const allChildItems = [];
-                    childrenLayouts.forEach((childLayout, index) => {
-                        const childNode = childNodes[index];
-                        const targetX = childTargetPositions[index];
-                        const offset = targetX - childNode.x;
-
-                        childLayout.forEach(item => {
-                            item.x += offset;
+                    if (n.children && n.children.length > 0) {
+                        // Recursively process children
+                        n.children.forEach(child => {
+                            info.children.push(firstPass(child, d + 1));
                         });
 
-                        allChildItems.push(...childLayout);
-                    });
+                        // Position children to avoid overlaps
+                        const numChildren = info.children.length;
 
-                    // Update parent references
-                    const directChildren = allChildItems.filter(item => node.children.some(c => c.id === item.node.id));
-                    directChildren.forEach(child => {
-                        child.parentItem = parentItem;
-                        child.siblings = directChildren;
-                    });
+                        if (numChildren === 1) {
+                            // Single child: place directly below
+                            info.children[0].x = 0;
+                        } else {
+                            // Multiple children: distribute them
+                            // Start by placing them with minimum spacing
+                            let positions = [];
 
-                    result.push(...allChildItems);
-                }
+                            if (numChildren % 2 === 1) {
+                                // Odd number: middle child at 0
+                                const middleIndex = Math.floor(numChildren / 2);
+                                positions[middleIndex] = 0;
+
+                                // Place children to the left
+                                for (let i = middleIndex - 1; i >= 0; i--) {
+                                    const rightSibling = info.children[i + 1];
+                                    const currentChild = info.children[i];
+
+                                    // Calculate minimum separation
+                                    const minSeparation = this.getMinSeparation(
+                                        currentChild, rightSibling, nodeWidth, hSpacing
+                                    );
+
+                                    positions[i] = positions[i + 1] - minSeparation;
+                                }
+
+                                // Place children to the right
+                                for (let i = middleIndex + 1; i < numChildren; i++) {
+                                    const leftSibling = info.children[i - 1];
+                                    const currentChild = info.children[i];
+
+                                    // Calculate minimum separation
+                                    const minSeparation = this.getMinSeparation(
+                                        leftSibling, currentChild, nodeWidth, hSpacing
+                                    );
+
+                                    positions[i] = positions[i - 1] + minSeparation;
+                                }
+                            } else {
+                                // Even number: center the group
+                                // Place first child
+                                positions[0] = 0;
+
+                                // Place remaining children
+                                for (let i = 1; i < numChildren; i++) {
+                                    const leftSibling = info.children[i - 1];
+                                    const currentChild = info.children[i];
+
+                                    const minSeparation = this.getMinSeparation(
+                                        leftSibling, currentChild, nodeWidth, hSpacing
+                                    );
+
+                                    positions[i] = positions[i - 1] + minSeparation;
+                                }
+
+                                // Center the group around 0
+                                const groupCenter = (positions[0] + positions[numChildren - 1]) / 2;
+                                positions = positions.map(p => p - groupCenter);
+                            }
+
+                            // Apply positions
+                            info.children.forEach((child, i) => {
+                                child.x = positions[i];
+                            });
+                        }
+
+                        // Calculate this node's extents based on children
+                        info.leftExtent = Math.min(
+                            0,
+                            ...info.children.map(c => c.x + c.leftExtent)
+                        );
+                        info.rightExtent = Math.max(
+                            0,
+                            ...info.children.map(c => c.x + c.rightExtent)
+                        );
+                    } else {
+                        // Leaf node
+                        info.leftExtent = 0;
+                        info.rightExtent = 0;
+                    }
+
+                    return info;
+                };
+
+                // Helper to get minimum separation between two subtrees
+                const minSeparation = this.getMinSeparation;
+
+                // Perform first pass
+                const treeInfo = firstPass(node, depth);
+
+                // Second pass: Convert relative positions to absolute positions
+                const result = [];
+
+                const secondPass = (info, absoluteX, absoluteY, parent) => {
+                    const item = {
+                        node: info.node,
+                        x: absoluteX,
+                        y: absoluteY,
+                        parentItem: parent,
+                        siblings: null
+                    };
+
+                    result.push(item);
+
+                    if (info.children.length > 0) {
+                        const childY = absoluteY + nodeHeight + vSpacing;
+                        const childItems = [];
+
+                        info.children.forEach(childInfo => {
+                            const childAbsoluteX = absoluteX + childInfo.x;
+                            childItems.push(secondPass(childInfo, childAbsoluteX, childY, item));
+                        });
+
+                        // Update siblings references
+                        const directChildren = childItems.filter(ci =>
+                            info.children.some(ch => ch.node.id === ci.node.id)
+                        );
+                        directChildren.forEach(child => {
+                            child.siblings = directChildren;
+                        });
+                    }
+
+                    return item;
+                };
+
+                secondPass(treeInfo, position, depth * (nodeHeight + vSpacing), null);
 
                 return result;
+            }
+
+            getMinSeparation(leftTree, rightTree, nodeWidth, hSpacing) {
+                // Calculate minimum horizontal separation between two subtrees
+                // by checking their contours at each level
+
+                const minGap = hSpacing + nodeWidth;
+
+                // Get right contour of left tree and left contour of right tree
+                const getContour = (tree, side) => {
+                    const contour = [];
+
+                    const traverse = (info, relX, depth) => {
+                        if (!contour[depth]) {
+                            contour[depth] = side === 'right' ? -Infinity : Infinity;
+                        }
+
+                        if (side === 'right') {
+                            contour[depth] = Math.max(contour[depth], relX);
+                        } else {
+                            contour[depth] = Math.min(contour[depth], relX);
+                        }
+
+                        if (info.children) {
+                            info.children.forEach(child => {
+                                traverse(child, relX + child.x, depth + 1);
+                            });
+                        }
+                    };
+
+                    traverse(tree, 0, 0);
+                    return contour;
+                };
+
+                const leftContour = getContour(leftTree, 'right');
+                const rightContour = getContour(rightTree, 'left');
+
+                // Find the maximum overlap
+                let maxSeparation = minGap;
+                const maxDepth = Math.max(leftContour.length, rightContour.length);
+
+                for (let d = 0; d < maxDepth; d++) {
+                    const leftPos = leftContour[d] !== undefined ? leftContour[d] : leftContour[leftContour.length - 1] || 0;
+                    const rightPos = rightContour[d] !== undefined ? rightContour[d] : rightContour[rightContour.length - 1] || 0;
+
+                    const separation = leftPos - rightPos + minGap;
+                    maxSeparation = Math.max(maxSeparation, separation);
+                }
+
+                return maxSeparation;
             }
 
             escapeXml(text) {
