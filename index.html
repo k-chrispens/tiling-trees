@@ -47,9 +47,18 @@
         }
 
         .tree-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding-top: 60px;
+            width: 100%;
+            height: calc(100vh - 80px);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow: hidden;
+            padding-top: 20px;
+        }
+
+        .tree-wrapper {
+            transform-origin: top center;
+            transition: transform 0.3s ease;
         }
 
         .node {
@@ -83,8 +92,8 @@
 
         .children-container {
             display: flex;
-            gap: 40px;
-            margin-top: 60px;
+            gap: 20px;
+            margin-top: 80px;
             position: relative;
             justify-content: center;
         }
@@ -100,10 +109,10 @@
         .children-container::before {
             content: '';
             position: absolute;
-            top: -60px;
+            top: -80px;
             left: 50%;
             width: 2px;
-            height: 30px;
+            height: 40px;
             background: #000;
             transform: translateX(-1px);
         }
@@ -112,7 +121,7 @@
         .children-container::after {
             content: '';
             position: absolute;
-            top: -30px;
+            top: -40px;
             left: 0;
             right: 0;
             height: 2px;
@@ -123,10 +132,10 @@
         .child-node::before {
             content: '';
             position: absolute;
-            top: -30px;
+            top: -40px;
             left: 50%;
             width: 2px;
-            height: 30px;
+            height: 40px;
             background: #000;
             transform: translateX(-1px);
         }
@@ -149,7 +158,9 @@
     </div>
 
     <div class="tree-container" id="tree-container">
-        <!-- Tree will be rendered here -->
+        <div class="tree-wrapper" id="tree-wrapper">
+            <!-- Tree will be rendered here -->
+        </div>
     </div>
 
     <canvas id="export-canvas"></canvas>
@@ -159,7 +170,9 @@
             constructor() {
                 this.nodeCounter = 0;
                 this.root = this.createNode(null, 'Start typing here...');
+                this.focusState = null; // Track which node has focus
                 this.render();
+                this.setupAutoScale();
             }
 
             createNode(parent, placeholder = 'new branch here') {
@@ -227,6 +240,7 @@
                 input.className = 'node-input';
                 input.value = node.text;
                 input.placeholder = node.placeholder;
+                input.dataset.nodeId = node.id; // Add ID for focus restoration
 
                 input.addEventListener('input', (e) => {
                     this.onNodeInput(node.id, e.target.value);
@@ -250,9 +264,29 @@
             }
 
             render() {
-                const container = document.getElementById('tree-container');
-                container.innerHTML = '';
-                container.appendChild(this.renderNode(this.root, true));
+                // Save focus state before re-rendering
+                const activeElement = document.activeElement;
+                if (activeElement && activeElement.classList.contains('node-input')) {
+                    const nodeId = activeElement.dataset.nodeId;
+                    const cursorPos = activeElement.selectionStart;
+                    this.focusState = { nodeId, cursorPos };
+                }
+
+                const wrapper = document.getElementById('tree-wrapper');
+                wrapper.innerHTML = '';
+                wrapper.appendChild(this.renderNode(this.root, true));
+
+                // Restore focus state after re-rendering
+                if (this.focusState) {
+                    const input = document.querySelector(`input[data-node-id="${this.focusState.nodeId}"]`);
+                    if (input) {
+                        input.focus();
+                        input.setSelectionRange(this.focusState.cursorPos, this.focusState.cursorPos);
+                    }
+                }
+
+                // Update scaling after render
+                this.updateScale();
             }
 
             getFilledNodes(node) {
@@ -297,8 +331,8 @@
             generateSVG(rootNode) {
                 const nodeHeight = 50;
                 const nodeWidth = 300;
-                const horizontalSpacing = 60;
-                const verticalSpacing = 100;
+                const horizontalSpacing = 40;
+                const verticalSpacing = 120;
 
                 // Calculate layout positions
                 const layout = this.calculateLayout(rootNode, 0, 0, nodeWidth, horizontalSpacing, verticalSpacing);
@@ -550,6 +584,37 @@
                     });
                 }
                 return maxId;
+            }
+
+            setupAutoScale() {
+                // Update scale on window resize
+                window.addEventListener('resize', () => {
+                    this.updateScale();
+                });
+            }
+
+            updateScale() {
+                const wrapper = document.getElementById('tree-wrapper');
+                const container = document.getElementById('tree-container');
+
+                if (!wrapper || !container) return;
+
+                // Get the natural size of the tree
+                wrapper.style.transform = 'scale(1)';
+                const wrapperRect = wrapper.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                // Calculate scale to fit
+                const scaleX = containerRect.width / (wrapperRect.width + 40); // Add padding
+                const scaleY = containerRect.height / (wrapperRect.height + 40);
+                const scale = Math.min(scaleX, scaleY, 1); // Never scale up, only down
+
+                // Apply scale
+                if (scale < 1) {
+                    wrapper.style.transform = `scale(${scale})`;
+                } else {
+                    wrapper.style.transform = 'scale(1)';
+                }
             }
         }
 
