@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiling Tree Builder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: #48bb78;
+        }
+
+        .btn-secondary:hover {
+            background: #38a169;
+        }
+
+        .btn-danger {
+            background: #f56565;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .tree-container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            min-height: 500px;
+            overflow: auto;
+        }
+
+        .node {
+            position: relative;
+        }
+
+        .node-input {
+            width: 300px;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .node-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .node-input.placeholder {
+            color: #a0aec0;
+            font-style: italic;
+        }
+
+        .node-input.filled {
+            background: #f7fafc;
+            border-color: #667eea;
+        }
+
+        .children-container {
+            margin-left: 60px;
+            margin-top: 20px;
+            position: relative;
+        }
+
+        .child-node {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .child-node::before {
+            content: '';
+            position: absolute;
+            left: -40px;
+            top: 20px;
+            width: 30px;
+            height: 2px;
+            background: #cbd5e0;
+        }
+
+        .children-container::before {
+            content: '';
+            position: absolute;
+            left: -40px;
+            top: 0;
+            bottom: 20px;
+            width: 2px;
+            background: #cbd5e0;
+        }
+
+        .instructions {
+            background: #edf2f7;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-left: 10px;
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .instructions h3 {
+            font-size: 14px;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+
+        .instructions p {
+            font-size: 13px;
+            color: #4a5568;
+            line-height: 1.5;
+        }
+
+        #export-canvas {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌳 Tiling Tree Builder</h1>
+            <p>Break down complex problems into manageable pieces</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn" onclick="app.exportSVG()">Export SVG</button>
+            <button class="btn btn-secondary" onclick="app.exportPNG()">Export PNG</button>
+            <button class="btn btn-danger" onclick="app.reset()">Reset Tree</button>
+
+            <div class="instructions">
+                <h3>How to use:</h3>
+                <p>Start typing in the root node. Two branches will automatically appear. As you fill branches, new ones sprout. The tree grows as you explore your problem space.</p>
+            </div>
+        </div>
+
+        <div class="tree-container" id="tree-container">
+            <!-- Tree will be rendered here -->
+        </div>
+    </div>
+
+    <canvas id="export-canvas"></canvas>
+
+    <script>
+        class TilingTree {
+            constructor() {
+                this.root = this.createNode(null, 'Start typing your problem here...');
+                this.nodeCounter = 0;
+                this.render();
+            }
+
+            createNode(parent, placeholder = 'new branch here') {
+                return {
+                    id: this.nodeCounter++,
+                    text: '',
+                    placeholder: placeholder,
+                    parent: parent,
+                    children: []
+                };
+            }
+
+            isFilled(node) {
+                return node.text.trim().length > 0;
+            }
+
+            onNodeInput(nodeId, text) {
+                const node = this.findNode(this.root, nodeId);
+                if (!node) return;
+
+                const wasFilled = this.isFilled(node);
+                node.text = text;
+                const isFilled = this.isFilled(node);
+
+                // If node just became filled and has no children, create initial 2 branches
+                if (!wasFilled && isFilled && node.children.length === 0) {
+                    node.children.push(this.createNode(node));
+                    node.children.push(this.createNode(node));
+                }
+
+                // Check if we need to add another placeholder branch
+                if (node.parent) {
+                    const siblings = node.parent.children;
+                    const allSiblingsFilled = siblings.every(s => this.isFilled(s));
+                    const hasPlaceholder = siblings.some(s => !this.isFilled(s));
+
+                    // If all siblings are filled and there's no placeholder, add one
+                    if (allSiblingsFilled && !hasPlaceholder) {
+                        node.parent.children.push(this.createNode(node.parent));
+                    }
+                }
+
+                this.saveToStorage();
+                this.render();
+            }
+
+            findNode(node, id) {
+                if (node.id === id) return node;
+                for (let child of node.children) {
+                    const found = this.findNode(child, id);
+                    if (found) return found;
+                }
+                return null;
+            }
+
+            renderNode(node, isRoot = false) {
+                const div = document.createElement('div');
+                div.className = isRoot ? 'node' : 'child-node';
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'node-input';
+                input.value = node.text;
+                input.placeholder = node.placeholder;
+
+                if (this.isFilled(node)) {
+                    input.classList.add('filled');
+                } else {
+                    input.classList.add('placeholder');
+                }
+
+                input.addEventListener('input', (e) => {
+                    this.onNodeInput(node.id, e.target.value);
+                });
+
+                div.appendChild(input);
+
+                if (node.children.length > 0) {
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'children-container';
+
+                    node.children.forEach(child => {
+                        childrenContainer.appendChild(this.renderNode(child, false));
+                    });
+
+                    div.appendChild(childrenContainer);
+                }
+
+                return div;
+            }
+
+            render() {
+                const container = document.getElementById('tree-container');
+                container.innerHTML = '';
+                container.appendChild(this.renderNode(this.root, true));
+            }
+
+            getFilledNodes(node) {
+                const result = [];
+
+                if (this.isFilled(node)) {
+                    result.push({
+                        ...node,
+                        children: []
+                    });
+
+                    const filledChildren = node.children
+                        .map(child => this.getFilledNodes(child))
+                        .flat();
+
+                    result[0].children = filledChildren;
+                }
+
+                return result;
+            }
+
+            exportSVG() {
+                const filledNodes = this.getFilledNodes(this.root);
+
+                if (filledNodes.length === 0) {
+                    alert('Please add some content to your tree before exporting.');
+                    return;
+                }
+
+                const svg = this.generateSVG(filledNodes[0]);
+                const blob = new Blob([svg], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'tiling-tree.svg';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            generateSVG(rootNode) {
+                const nodeHeight = 40;
+                const nodeWidth = 300;
+                const horizontalSpacing = 80;
+                const verticalSpacing = 60;
+
+                // Calculate layout positions
+                const layout = this.calculateLayout(rootNode, 0, 0, nodeWidth, horizontalSpacing, verticalSpacing);
+
+                // Find bounds
+                let minX = 0, maxX = 0, minY = 0, maxY = 0;
+                layout.forEach(item => {
+                    minX = Math.min(minX, item.x);
+                    maxX = Math.max(maxX, item.x + nodeWidth);
+                    minY = Math.min(minY, item.y);
+                    maxY = Math.max(maxY, item.y + nodeHeight);
+                });
+
+                const padding = 40;
+                const width = maxX - minX + padding * 2;
+                const height = maxY - minY + padding * 2;
+                const offsetX = -minX + padding;
+                const offsetY = -minY + padding;
+
+                let svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <style>
+        .node-rect { fill: #f7fafc; stroke: #667eea; stroke-width: 2; rx: 8; }
+        .node-text { fill: #2d3748; font-family: Arial, sans-serif; font-size: 14px; }
+        .branch-line { stroke: #cbd5e0; stroke-width: 2; fill: none; }
+    </style>
+`;
+
+                // Draw connections first (so they're behind nodes)
+                layout.forEach(item => {
+                    if (item.parent) {
+                        const parentItem = layout.find(l => l.node.id === item.parent.id);
+                        if (parentItem) {
+                            const x1 = parentItem.x + nodeWidth / 2 + offsetX;
+                            const y1 = parentItem.y + nodeHeight + offsetY;
+                            const x2 = item.x + nodeWidth / 2 + offsetX;
+                            const y2 = item.y + offsetY;
+
+                            svg += `    <path class="branch-line" d="M ${x1} ${y1} L ${x1} ${(y1 + y2) / 2} L ${x2} ${(y1 + y2) / 2} L ${x2} ${y2}" />\n`;
+                        }
+                    }
+                });
+
+                // Draw nodes
+                layout.forEach(item => {
+                    const x = item.x + offsetX;
+                    const y = item.y + offsetY;
+
+                    svg += `    <rect class="node-rect" x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" />\n`;
+
+                    // Wrap text if too long
+                    const text = item.node.text;
+                    const maxChars = 35;
+                    if (text.length > maxChars) {
+                        const line1 = text.substring(0, maxChars);
+                        const line2 = text.substring(maxChars, maxChars * 2);
+                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 - 5}" text-anchor="middle">${this.escapeXml(line1)}</text>\n`;
+                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 12}" text-anchor="middle">${this.escapeXml(line2)}</text>\n`;
+                    } else {
+                        svg += `    <text class="node-text" x="${x + nodeWidth / 2}" y="${y + nodeHeight / 2 + 5}" text-anchor="middle">${this.escapeXml(text)}</text>\n`;
+                    }
+                });
+
+                svg += '</svg>';
+                return svg;
+            }
+
+            calculateLayout(node, depth, position, nodeWidth, hSpacing, vSpacing) {
+                const result = [];
+                const x = position;
+                const y = depth * (40 + vSpacing);
+
+                result.push({
+                    node: node,
+                    x: x,
+                    y: y,
+                    parent: node.parent
+                });
+
+                if (node.children && node.children.length > 0) {
+                    let childX = x;
+                    node.children.forEach((child, index) => {
+                        const childLayout = this.calculateLayout(child, depth + 1, childX, nodeWidth, hSpacing, vSpacing);
+                        result.push(...childLayout);
+
+                        // Calculate width of this subtree
+                        const childMaxX = Math.max(...childLayout.map(item => item.x));
+                        childX = childMaxX + nodeWidth + hSpacing;
+                    });
+
+                    // Center parent over children
+                    const firstChild = result.find(item => node.children.includes(item.node));
+                    const lastChildLayout = result.filter(item => item.node === node.children[node.children.length - 1]);
+                    const lastChild = lastChildLayout[0];
+
+                    if (firstChild && lastChild) {
+                        const childrenCenter = (firstChild.x + lastChild.x + nodeWidth) / 2;
+                        const parentItem = result.find(item => item.node === node);
+                        parentItem.x = childrenCenter - nodeWidth / 2;
+                    }
+                }
+
+                return result;
+            }
+
+            escapeXml(text) {
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&apos;');
+            }
+
+            exportPNG() {
+                const filledNodes = this.getFilledNodes(this.root);
+
+                if (filledNodes.length === 0) {
+                    alert('Please add some content to your tree before exporting.');
+                    return;
+                }
+
+                const svg = this.generateSVG(filledNodes[0]);
+
+                // Create an image from SVG
+                const img = new Image();
+                const blob = new Blob([svg], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+
+                img.onload = () => {
+                    const canvas = document.getElementById('export-canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+
+                    canvas.toBlob((blob) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'tiling-tree.png';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    });
+
+                    URL.revokeObjectURL(url);
+                };
+
+                img.src = url;
+            }
+
+            reset() {
+                if (confirm('Are you sure you want to reset the tree? This cannot be undone.')) {
+                    this.root = this.createNode(null, 'Start typing your problem here...');
+                    this.nodeCounter = 0;
+                    this.saveToStorage();
+                    this.render();
+                }
+            }
+
+            saveToStorage() {
+                try {
+                    localStorage.setItem('tilingTree', JSON.stringify(this.root));
+                } catch (e) {
+                    console.warn('Could not save to localStorage:', e);
+                }
+            }
+
+            loadFromStorage() {
+                try {
+                    const saved = localStorage.getItem('tilingTree');
+                    if (saved) {
+                        this.root = JSON.parse(saved);
+                        this.nodeCounter = this.findMaxId(this.root) + 1;
+                        this.render();
+                    }
+                } catch (e) {
+                    console.warn('Could not load from localStorage:', e);
+                }
+            }
+
+            findMaxId(node) {
+                let maxId = node.id;
+                node.children.forEach(child => {
+                    maxId = Math.max(maxId, this.findMaxId(child));
+                });
+                return maxId;
+            }
+        }
+
+        // Initialize app
+        const app = new TilingTree();
+        app.loadFromStorage();
+    </script>
+</body>
+</html>
