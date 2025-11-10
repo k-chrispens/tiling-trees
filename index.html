@@ -51,14 +51,14 @@
             height: calc(100vh - 80px);
             position: relative;
             overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .tree-wrapper {
-            position: absolute;
-            top: 50%;
-            left: 50%;
             transform-origin: center center;
-            transform: translate(-50%, -50%) scale(1);
+            position: relative;
         }
 
         #connection-lines {
@@ -75,14 +75,8 @@
             z-index: 1;
         }
 
-        .node {
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
         .node-input {
+            position: absolute;
             width: 300px;
             padding: 10px 14px;
             border: 1px solid #ddd;
@@ -102,21 +96,6 @@
         .node-input::placeholder {
             color: #ccc;
             font-style: italic;
-        }
-
-        .children-container {
-            display: flex;
-            gap: 150px;
-            margin-top: 120px;
-            position: relative;
-            justify-content: center;
-        }
-
-        .child-node {
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
         }
 
         #export-canvas {
@@ -209,38 +188,6 @@
                 return null;
             }
 
-            renderNode(node, isRoot = false) {
-                const div = document.createElement('div');
-                div.className = isRoot ? 'node' : 'child-node';
-
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.className = 'node-input';
-                input.value = node.text;
-                input.placeholder = node.placeholder;
-                input.dataset.nodeId = node.id; // Add ID for focus restoration
-
-                input.addEventListener('input', (e) => {
-                    this.onNodeInput(node.id, e.target.value);
-                });
-
-                div.appendChild(input);
-
-                if (node.children.length > 0) {
-                    const childrenContainer = document.createElement('div');
-                    childrenContainer.className = 'children-container';
-                    childrenContainer.setAttribute('data-children', node.children.length);
-
-                    node.children.forEach(child => {
-                        childrenContainer.appendChild(this.renderNode(child, false));
-                    });
-
-                    div.appendChild(childrenContainer);
-                }
-
-                return div;
-            }
-
             render() {
                 // Save focus state before re-rendering
                 const activeElement = document.activeElement;
@@ -250,9 +197,49 @@
                     this.focusState = { nodeId, cursorPos };
                 }
 
+                // Use calculateLayout to position all nodes
+                const nodeWidth = 300;
+                const nodeHeight = 50;
+                const hSpacing = 60;  // Reduced from 150
+                const vSpacing = 100;
+
+                const layout = this.calculateLayout(this.root, 0, 0, nodeWidth, hSpacing, vSpacing);
+
+                // Find bounds
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                layout.forEach(item => {
+                    minX = Math.min(minX, item.x);
+                    maxX = Math.max(maxX, item.x + nodeWidth);
+                    minY = Math.min(minY, item.y);
+                    maxY = Math.max(maxY, item.y + nodeHeight);
+                });
+
+                const padding = 100;
+                const width = maxX - minX + padding * 2;
+                const height = maxY - minY + padding * 2;
+
                 const content = document.getElementById('tree-content');
+                content.style.width = width + 'px';
+                content.style.height = height + 'px';
                 content.innerHTML = '';
-                content.appendChild(this.renderNode(this.root, true));
+
+                // Create absolutely positioned inputs for each node
+                layout.forEach(item => {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'node-input';
+                    input.value = item.node.text;
+                    input.placeholder = item.node.placeholder;
+                    input.dataset.nodeId = item.node.id;
+                    input.style.left = (item.x - minX + padding) + 'px';
+                    input.style.top = (item.y - minY + padding) + 'px';
+
+                    input.addEventListener('input', (e) => {
+                        this.onNodeInput(item.node.id, e.target.value);
+                    });
+
+                    content.appendChild(input);
+                });
 
                 // Restore focus state after re-rendering
                 if (this.focusState) {
@@ -311,8 +298,8 @@
             generateSVG(rootNode) {
                 const nodeHeight = 50;
                 const nodeWidth = 300;
-                const horizontalSpacing = 150;
-                const verticalSpacing = 140;
+                const horizontalSpacing = 60;
+                const verticalSpacing = 100;
 
                 // Calculate layout positions
                 const layout = this.calculateLayout(rootNode, 0, 0, nodeWidth, horizontalSpacing, verticalSpacing);
@@ -619,7 +606,7 @@
 
             applyTransform() {
                 const wrapper = document.getElementById('tree-wrapper');
-                wrapper.style.transform = `translate(-50%, -50%) scale(${this.scale})`;
+                wrapper.style.transform = `scale(${this.scale})`;
                 this.drawConnectionLines();
             }
 
